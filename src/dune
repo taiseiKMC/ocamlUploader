@@ -1,0 +1,15 @@
+(library
+  (public_name ocamlUploader)
+  (name ocamlUploader)
+  (libraries
+    cohttp-lwt-unix
+    conduit-lwt
+    lwt
+    lwt.unix
+    re
+    multipart_form
+    multipart_form.lwt
+    str
+    logs
+    dokeysto
+    uuidm))
