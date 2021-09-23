@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+
+{# sample.jingoo #}
+<h1>{{ title }}</h1>
+
+<ul>
+{% for file in files %}
+  <li><a href="{{ file.url }}">{{ file.name }}</a> {{ file.descr }}</li>
+{% endfor %}
+</ul>
+
+{% if is_debug %}
+<p>this is debug mode!</p>
+{% endif %}

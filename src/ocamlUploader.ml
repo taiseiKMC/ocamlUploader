@@ -2,22 +2,10 @@ open Lwt
 open Cohttp
 open Cohttp_lwt_unix
 
-module Rwdb = Dokeysto.Db.RW
 
 let uuidt = ref Uuidm.nil
 
 let content_dir = "uploads/"
-let filename_db_filename = "filenames.db"
-let filename_db =
-  if Sys.file_exists filename_db_filename
-  then Rwdb.open_existing filename_db_filename
-  else Rwdb.create filename_db_filename
-
-let descr_db_filename = "descr.db"
-let descr_db =
-  if Sys.file_exists descr_db_filename
-  then Rwdb.open_existing descr_db_filename
-  else Rwdb.create descr_db_filename
 
 let download req path =
   (match Request.meth req with
@@ -25,7 +13,7 @@ let download req path =
    | _ -> failwith "invalid request");
   let idx = Str.match_end () in
   let filename = String.sub path idx (String.length path - idx) in
-  let original_name = Rwdb.find filename_db filename in
+  let (_, _, original_name) = Db.Filename.find filename in
   let filename = content_dir ^ filename in
   let headers = Header.init () in
   let header_content_disposition = Format.sprintf "attachment; filename=%s" original_name in
@@ -87,10 +75,9 @@ let upload req body =
       parses (None, None) >>=
       fun ((uuid, name), dsr_ctn) ->
       Lwt_stream.to_list dsr_ctn >>= fun descr ->
-      Rwdb.add descr_db uuid (String.concat "" descr);
-      Rwdb.add filename_db uuid name;
-      Rwdb.sync descr_db;
-      Rwdb.sync filename_db;
+      let descr = String.concat "" descr in
+      let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
+      Db.Filename.add uuid (descr, "", name);
       Lwt.return (Format.sprintf "%s : %s" uuid name) in
 
 
@@ -110,10 +97,8 @@ let index _req =
   (* let uri = req |> Request.uri |> Uri.to_string in
      let meth = req |> Request.meth |> Code.string_of_method in
      let headers = req |> Request.headers |> Header.to_string in *)
-  let filenames = Rwdb.fold
-      (fun k v s ->
-         let descr = Rwdb.find descr_db k in
-         (k, v, descr) :: s) filename_db [] in
+  let filenames = Db.Filename.fold
+      (fun k v s -> (k, v) :: s) [] in
   (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
      Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
       meth headers body indexes) *)

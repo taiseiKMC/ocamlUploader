@@ -2,7 +2,7 @@ open Jingoo
 
 let build_index url files =
   let files = List.map
-      (fun (uuid, name, descr) -> 
+      (fun (uuid, (descr, _, name)) -> 
          Jg_types.Tobj [
            ("name", Jg_types.Tstr name);
            ("url", Jg_types.Tstr (url ^ uuid));
