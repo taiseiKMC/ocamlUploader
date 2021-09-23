@@ -31,15 +31,15 @@ end
 
 module Filename = struct
   include Make (struct
-      type val_ty = string * string * string
+      type val_ty = string * float * string
 
       let encode (descr, uptime, filename) =
-        Format.sprintf "%s<%s<%s" descr uptime filename
+        Format.sprintf "%s<%f<%s" descr uptime filename
 
       let decode value =
         let lst = Str.split (Str.regexp "<") value in
         match lst with
-        | descr :: uptime :: filename -> descr, uptime, (String.concat "<" filename)
+        | descr :: uptime :: filename -> descr, (float_of_string uptime), (String.concat "<" filename)
         | _ -> failwith @@ "parse error " ^ (String.concat ", " lst)
     end)
 

@@ -34,8 +34,7 @@ let upload req body =
     Lwt_io.with_file ~mode:Output filename (fun channel ->
         Lwt_stream.iter_s (fun str ->
             Lwt_io.write channel str) stream
-      )
-  in
+      ) in
   let random_unique_filename header =
     Logs.info (fun m -> m "filename: %a\n" Header.pp header);
     let cd = match Header.content_disposition header with
@@ -77,7 +76,8 @@ let upload req body =
       Lwt_stream.to_list dsr_ctn >>= fun descr ->
       let descr = String.concat "" descr in
       let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
-      Db.Filename.add uuid (descr, "", name);
+      let time = Unix.time () in
+      Db.Filename.add uuid (descr, time, name);
       Lwt.return (Format.sprintf "%s : %s" uuid name) in
 
 
@@ -99,6 +99,7 @@ let index _req =
      let headers = req |> Request.headers |> Header.to_string in *)
   let filenames = Db.Filename.fold
       (fun k v s -> (k, v) :: s) [] in
+  let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
   (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
      Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
       meth headers body indexes) *)
