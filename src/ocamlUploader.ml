@@ -3,9 +3,22 @@ open Cohttp
 open Cohttp_lwt_unix
 
 
-let uuidt = ref Uuidm.nil
+let uuidt = ref (Uuidm.v5 Uuidm.nil @@ string_of_float @@ Unix.time ())
 
 let content_dir = "uploads/"
+
+let index_body () =
+    (* let uri = req |> Request.uri |> Uri.to_string in
+       let meth = req |> Request.meth |> Code.string_of_method in
+       let headers = req |> Request.headers |> Header.to_string in *)
+    let filenames = Db.Filename.fold
+        (fun k v s -> (k, v) :: s) [] in
+    let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
+    (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
+       Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
+        meth headers body indexes) *)
+    let url = "download/" in
+    Index.build_index url filenames
 
 let download req path =
   (match Request.meth req with
@@ -90,21 +103,13 @@ let upload req body =
   let header = match header with | Ok str -> str | Error str -> failwith str in
   write { header; body }
   >>= fun file_list ->
-  let body = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
+  let body1 = index_body () in
+  let body2 = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
+  let body = body1 ^ body2 in
   Server.respond_string ~status:`OK ~body ()
 
 let index _req =
-  (* let uri = req |> Request.uri |> Uri.to_string in
-     let meth = req |> Request.meth |> Code.string_of_method in
-     let headers = req |> Request.headers |> Header.to_string in *)
-  let filenames = Db.Filename.fold
-      (fun k v s -> (k, v) :: s) [] in
-  let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
-  (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
-     Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
-      meth headers body indexes) *)
-  let url = "download/" in
-  let body = Index.build_index url filenames in
+  let body = index_body () in
   Server.respond_string ~status:`OK ~body ()
 
 let server =
