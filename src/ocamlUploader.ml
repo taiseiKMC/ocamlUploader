@@ -7,18 +7,18 @@ let uuidt = ref (Uuidm.v5 Uuidm.nil @@ string_of_float @@ Unix.time ())
 
 let content_dir = "uploads/"
 
-let index_body () =
-    (* let uri = req |> Request.uri |> Uri.to_string in
-       let meth = req |> Request.meth |> Code.string_of_method in
-       let headers = req |> Request.headers |> Header.to_string in *)
-    let filenames = Db.Filename.fold
-        (fun k v s -> (k, v) :: s) [] in
-    let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
-    (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
-       Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
-        meth headers body indexes) *)
-    let url = "download/" in
-    Index.build_index url filenames
+let index_body ?upload_status () =
+  (* let uri = req |> Request.uri |> Uri.to_string in
+     let meth = req |> Request.meth |> Code.string_of_method in
+     let headers = req |> Request.headers |> Header.to_string in *)
+  let filenames = Db.Filename.fold
+      (fun k v s -> (k, v) :: s) [] in
+  let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
+  (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
+     Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
+      meth headers body indexes) *)
+  let url = "download/" in
+  Index.build_index url ?upload_status filenames
 
 let download req path =
   (match Request.meth req with
@@ -29,7 +29,7 @@ let download req path =
   let (_, _, original_name) = Db.Filename.find filename in
   let filename = content_dir ^ filename in
   let headers = Header.init () in
-  let header_content_disposition = Format.sprintf "attachment; filename=%s" original_name in
+  let header_content_disposition = Format.sprintf "attachment; filename= %s" original_name in
   let headers = Header.add headers "Content-Disposition" header_content_disposition in
   (* todo file existense check *)
   Server.respond_file ~headers ~fname:filename ()
@@ -103,9 +103,8 @@ let upload req body =
   let header = match header with | Ok str -> str | Error str -> failwith str in
   write { header; body }
   >>= fun file_list ->
-  let body1 = index_body () in
-  let body2 = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
-  let body = body1 ^ body2 in
+  let upload_status = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
+  let body = index_body ~upload_status () in
   Server.respond_string ~status:`OK ~body ()
 
 let index _req =

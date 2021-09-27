@@ -11,42 +11,62 @@
 </head>
 <body>
   <h1>{{ title }}</h1>
-    <h3 class="ml-3">Uploaded File List</h3>
 
-    <div class="ml-3">
-      <table class="table table-striped">
-        <thead>
+  <div class="m-3 col-10">
+    <h3>Uploaded File List</h3>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>File name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          {% for file in files %}
           <tr>
-            <th>#</th>
-            <th>File name</th>
-            <th>Description</th>
+            <td></td>
+            <td><a href="{{ file.url }}">{{ file.name }}</a></td>
+            <td>{{ file.descr }}</td>
           </tr>
-        </thead>
-        <tbody>
-            {% for file in files %}
-            <tr>
-              <td></td>
-              <td><a href="{{ file.url }}">{{ file.name }}</a></td>
-              <td>{{ file.descr }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+          {% endfor %}
+      </tbody>
     </table>
   </div>
 
-  <form method="post" action="upload" enctype="multipart/form-data">
-    <h3>Upload Form</h3>
-    <div class="form-group">
-      <label>File：</label>
-      <input type="file" name="upfile" required>
-      <label>Description：</label>
-      <input type="text" name="description" class="form-control">
-      <button type="submit">Upload</button>
-    </div>
-  </form>
+  <div class="m-3 col-10">
+    <form method="post" action="upload" enctype="multipart/form-data">
+      <h3>Upload Form</h3>
+      <div class="form-group">
+        <label>File: </label>
+        <input type="file" name="upfile" required>
+        <div class="form-inline">
+          <label>Description: </label>
+          <input type="text" name="description" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary" >Upload</button>
+      </div>
+    </form>
+  </div>
 
+  {% if uploaded %}
+  <h5>{{ upload_status }}</h5>
+  {% endif %}
+  
   {% if is_debug %}
-  <p>this is debug mode!</p>
+  <div class="m-5">
+    <h3>Info</h3>
+    <p>Upload file using curl
+      <code>
+        curl -X POST -F upfile=@/path/to/file -F description="D35CR1PT10N" http://&lt;host&gt;/upload
+      </code>
+    </p>
+    <p>Download file using curl
+      <code>
+        curl -O http://&lt;host&gt;/download/&lt;uuid&gt;
+      </code>
+    </p>
+  </div>
   {% endif %}
 
 
