@@ -1,3 +1,12 @@
+opam-version: "2.0"
+name: "ocamlUploader"
+version: "0.1"
+authors: "taiseiKMC"
+maintainer: "taiseiKMC"
+synopsis: "File Uploader implemented by OCaml"
+license: "MIT"
+homepage: "https://gitlab.com/taiseiKMC/ocamlUploader"
+
 build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
