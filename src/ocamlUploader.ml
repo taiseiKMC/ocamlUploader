@@ -36,7 +36,8 @@ let download req path =
 
 type post_field = [
     `Upfile of string * string * string
-  | `Descr ]
+  | `Descr
+  | `Filename ]
 
 let upload req (body : Cohttp_lwt.Body.t) =
   let headers = req |> Request.headers |> Header.to_string in
@@ -127,23 +128,16 @@ let debug_addrecord req body =
   let headers = req |> Request.headers |> Header.to_string in
   Cohttp_lwt.Body.to_string body >>= fun body ->
   let open Multipart_form in
-  let save_part : filename:string -> Multipart_form.Header.t -> string Lwt_stream.t ->
-    unit Lwt.t = fun ~filename _header stream ->
-    Lwt_io.with_file ~mode:Output filename (fun channel ->
-        Lwt_stream.iter_s (fun str ->
-            Lwt_io.write channel str) stream
-      ) in
   let random_unique_filename header =
     Logs.info (fun m -> m "filename: %a\n" Header.pp header);
     let cd = match Header.content_disposition header with
       | Some cd -> cd
       | None -> failwith "content-disposition is not exist" in
-    let name = Content_disposition.filename cd in
-    let uuid = Uuidm.v5 !uuidt (Option.default "" name) in
-    uuidt := uuid;
-    let uuid = Uuidm.to_string uuid in
-    let name = Option.default uuid name in
-    (uuid, name, content_dir ^ uuid) in
+    let fname = match Content_disposition.name cd with
+      | Some fn -> fn
+      | None -> failwith "unexpected post name" in
+    if fname = "description" then `Descr else `Filename
+  in
   let identify header = random_unique_filename header in
 
   let write data =
@@ -152,19 +146,29 @@ let debug_addrecord req body =
     (* Logs.info (fun m -> m "leaf: %a\ncontent: %s" Header.pp data.header data.body); *)
 
     let `Parse th, stream = Multipart_form_lwt.(stream ~identify body_stream content_type) in
-    let saves file_list = Lwt_stream.get stream >>= function
-      | None -> Lwt.return file_list
-      | Some ((uuid, name, filename), hdr, contents) ->
-        save_part ~filename hdr contents >>= fun () ->
+    let rec saves (fn, descr) = Lwt_stream.get stream >>= function
+      | None -> Lwt.return (fn, descr)
+      | Some (`Descr, _hdr, contents) ->
         Lwt_stream.to_list contents >>= fun descr ->
-        let descr = String.concat "" descr in
-        let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
-        let time = Unix.time () in
-        Db.Filename.add uuid (descr, time, name);
-        Lwt.return (Format.sprintf "%s : %s" uuid name) in
-    both th (saves "Empty") >>= fun (res, file_list) ->
+        saves (fn, Some descr)
+      | Some (`Filename, _hdr, contents) ->
+        Lwt_stream.to_list contents >>= fun fn ->
+        let fn = String.concat "" fn in
+        saves (Some fn, descr)
+    in
+    both th (saves (None, None)) >>= fun (res, (filename, descr)) ->
+    let descr = Option.default [""] descr in
+    let descr = String.concat "" descr in
+    let descr = if descr = "" then "(No description is given)" else descr in
+    let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
+    let time = Unix.time () in
+    let uuid = Uuidm.v5 !uuidt "" in
+    uuidt := uuid;
+    let uuid = Uuidm.to_string uuid in
+    let filename = Option.default uuid filename in
+    Db.Filename.add uuid (descr, time, filename);
     match res with
-    | Ok _ -> Lwt.return file_list
+    | Ok _ -> Lwt.return (Format.sprintf "%s : %s" uuid filename)
     | Error (`Msg str) -> failwith str in
 
   let header = Angstrom.parse_string Header.Decoder.header ~consume:Prefix headers in
