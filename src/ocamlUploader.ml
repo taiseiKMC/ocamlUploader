@@ -123,6 +123,58 @@ let upload req (body : Cohttp_lwt.Body.t) =
   let headers = Cohttp.Header.init_with "Location" "/" in
   Server.respond_string ~headers ~status:`See_other ~body ()
 
+let debug_addrecord req body =
+  let headers = req |> Request.headers |> Header.to_string in
+  Cohttp_lwt.Body.to_string body >>= fun body ->
+  let open Multipart_form in
+  let save_part : filename:string -> Multipart_form.Header.t -> string Lwt_stream.t ->
+    unit Lwt.t = fun ~filename _header stream ->
+    Lwt_io.with_file ~mode:Output filename (fun channel ->
+        Lwt_stream.iter_s (fun str ->
+            Lwt_io.write channel str) stream
+      ) in
+  let random_unique_filename header =
+    Logs.info (fun m -> m "filename: %a\n" Header.pp header);
+    let cd = match Header.content_disposition header with
+      | Some cd -> cd
+      | None -> failwith "content-disposition is not exist" in
+    let name = Content_disposition.filename cd in
+    let uuid = Uuidm.v5 !uuidt (Option.default "" name) in
+    uuidt := uuid;
+    let uuid = Uuidm.to_string uuid in
+    let name = Option.default uuid name in
+    (uuid, name, content_dir ^ uuid) in
+  let identify header = random_unique_filename header in
+
+  let write data =
+    let content_type = Header.content_type data.header in
+    let body_stream = Lwt_stream.of_list [data.body] in
+    (* Logs.info (fun m -> m "leaf: %a\ncontent: %s" Header.pp data.header data.body); *)
+
+    let `Parse th, stream = Multipart_form_lwt.(stream ~identify body_stream content_type) in
+    let saves file_list = Lwt_stream.get stream >>= function
+      | None -> Lwt.return file_list
+      | Some ((uuid, name, filename), hdr, contents) ->
+        save_part ~filename hdr contents >>= fun () ->
+        Lwt_stream.to_list contents >>= fun descr ->
+        let descr = String.concat "" descr in
+        let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
+        let time = Unix.time () in
+        Db.Filename.add uuid (descr, time, name);
+        Lwt.return (Format.sprintf "%s : %s" uuid name) in
+    both th (saves "Empty") >>= fun (res, file_list) ->
+    match res with
+    | Ok _ -> Lwt.return file_list
+    | Error (`Msg str) -> failwith str in
+
+  let header = Angstrom.parse_string Header.Decoder.header ~consume:Prefix headers in
+  let header = match header with | Ok str -> str | Error str -> failwith str in
+  write { header; body }
+  >>= fun file_list ->
+  let upload_status = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
+  let body = index_body ~upload_status () in
+  Server.respond_string ~status:`OK ~body ()
+
 let index _req =
   let body = index_body () in
   Server.respond_string ~status:`OK ~body ()
@@ -133,9 +185,11 @@ let server port =
     let path = req |> Request.uri |> Uri.path in
     let download_re = Str.regexp "/download/*" in
     let upload_re = Str.regexp "/upload" in
+    let debug_addrecord_re = Str.regexp "/debug/add_record" in
     begin
       if Str.string_match download_re path 0 then download req path
       else if Str.string_match upload_re path 0 then upload req body
+      else if Str.string_match debug_addrecord_re path 0 then debug_addrecord req body
       else index req
     end
   in
