@@ -124,6 +124,48 @@ let upload req (body : Cohttp_lwt.Body.t) =
   let headers = Cohttp.Header.init_with "Location" "/" in
   Server.respond_string ~headers ~status:`See_other ~body ()
 
+let remove_record req body =
+  let headers = req |> Request.headers |> Header.to_string in
+  Cohttp_lwt.Body.to_string body >>= fun body ->
+  let open Multipart_form in
+  let identify _ = () in
+
+  let write data =
+    let content_type = Header.content_type data.header in
+    let body_stream = Lwt_stream.of_list [data.body] in
+    (* Logs.info (fun m -> m "leaf: %a\ncontent: %s" Header.pp data.header data.body); *)
+
+    let `Parse th, stream = Multipart_form_lwt.(stream ~identify body_stream content_type) in
+    let saves () = Lwt_stream.get stream >>= function
+      | None -> failwith "Recieved body has no data"
+      | Some ((), _hdr, contents) ->
+        Lwt_stream.to_list contents >>= fun fn ->
+        let fn = String.concat "" fn in
+        Lwt.return fn
+    in
+    both th (saves ()) >>= fun (res, fn) ->
+    match res, Db.Filename.find_opt fn with
+    | Ok _, Some _ ->
+      let filename = content_dir ^ fn in
+      Lwt_unix.unlink filename >>= fun () ->
+      Db.Filename.remove fn;
+      Lwt.return (`OK, fn)
+    | Error (`Msg str), _ -> Lwt.return (`Internal_server_error, str)
+    | _, None -> Lwt.return (`Not_found, "") in
+
+  let header = Angstrom.parse_string Header.Decoder.header ~consume:Prefix headers in
+  let header = match header with | Ok str -> str | Error str -> failwith str in
+  write { header; body }
+  >>= fun (status, str) ->
+  let upload_status =
+    match status with
+    | `OK -> Format.sprintf "Succeeded to delete \n%s\n" (String.concat "\n" [str])
+    | `Internal_server_error -> str
+    | _ -> "Failed" in
+  let body = index_body ~upload_status () in
+  Server.respond_string ~status ~body ()
+
+
 let debug_addrecord req body =
   let headers = req |> Request.headers |> Header.to_string in
   Cohttp_lwt.Body.to_string body >>= fun body ->
@@ -189,10 +231,12 @@ let server port =
     let path = req |> Request.uri |> Uri.path in
     let download_re = Str.regexp "/download/*" in
     let upload_re = Str.regexp "/upload" in
+    let delete_re = Str.regexp "/debug/delete" in
     let debug_addrecord_re = Str.regexp "/debug/add_record" in
     begin
       if Str.string_match download_re path 0 then download req path
       else if Str.string_match upload_re path 0 then upload req body
+      else if Str.string_match delete_re path 0 then remove_record req body
       else if Str.string_match debug_addrecord_re path 0 then debug_addrecord req body
       else index req
     end
