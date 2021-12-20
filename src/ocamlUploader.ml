@@ -38,9 +38,9 @@ type post_field = [
     `Upfile of string * string * string
   | `Descr ]
 
-let upload req body =
+let upload req (body : Cohttp_lwt.Body.t) =
   let headers = req |> Request.headers |> Header.to_string in
-  Cohttp_lwt.Body.to_string body >>= fun body ->
+  let content_length = match Request.encoding req  with | Fixed cl -> Some cl | _ -> None in
   let open Multipart_form in
   let save_part : filename:string -> Multipart_form.Header.t -> string Lwt_stream.t ->
     unit Lwt.t = fun ~filename _header stream ->
@@ -69,7 +69,15 @@ let upload req body =
 
   let write data =
     let content_type = Header.content_type data.header in
-    let body_stream = Lwt_stream.of_list [data.body] in
+    let body_stream = Cohttp_lwt.Body.to_stream (data.body : Cohttp_lwt.Body.t) in
+    let bytes_size = ref 0L in
+    let body_stream = Lwt_stream.map (fun s -> bytes_size := Int64.(add (of_int (String.length s)) !bytes_size);s) body_stream in
+    let check_len = Lwt_stream.closed body_stream >>= fun () ->
+      match content_length with
+      | Some content_length ->
+        if (!bytes_size = content_length) then Lwt.return_ok ()
+        else Lwt.return_error "Connection corrupted"
+      | None -> Lwt.return_ok () in
     (* Logs.info (fun m -> m "leaf: %a\ncontent: %s" Header.pp data.header data.body); *)
 
     let `Parse th, stream = Multipart_form_lwt.(stream ~identify body_stream content_type) in
@@ -79,31 +87,37 @@ let upload req body =
       | None, (Some upf, None) -> Lwt.return (upf, Lwt_stream.of_list ["(No description is given)"])
       | Some (`Upfile (uuid, name, filename), hdr, contents), (None, descr) ->
         save_part ~filename hdr contents >>= fun () ->
-        parses (Some (uuid, name), descr)
+        parses (Some (uuid, name, filename), descr)
       | Some (`Descr, _hdr, contents), (upf, None) ->
         parses (upf, Some contents)
       | _ -> failwith "Unexpected contents" in
     let saves () =
       parses (None, None) >>=
-      fun ((uuid, name), dsr_ctn) ->
+      fun ((uuid, name, filename), dsr_ctn) ->
       Lwt_stream.to_list dsr_ctn >>= fun descr ->
       let descr = String.concat "" descr in
       let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
       let time = Unix.time () in
       Db.Filename.add uuid (descr, time, name);
-      Lwt.return (Format.sprintf "%s : %s" uuid name) in
+      Lwt.return ((uuid, filename), Format.sprintf "%s : %s" uuid name) in
 
 
-    both th (saves ()) >>= fun (res, file_list) ->
+    both th (saves ()) >>= fun (res, ((uuid, filename), file)) ->
+    check_len >>= (function
+    | Ok () -> Lwt.return_unit
+    | Error str ->
+        Db.Filename.remove uuid;
+        Lwt_unix.unlink filename >>= fun () ->
+        failwith str) >>= fun () ->
     match res with
-    | Ok _ -> Lwt.return file_list
+    | Ok _ -> Lwt.return file
     | Error (`Msg str) -> failwith str in
 
   let header = Angstrom.parse_string Header.Decoder.header ~consume:Prefix headers in
   let header = match header with | Ok str -> str | Error str -> failwith str in
   write { header; body }
-  >>= fun file_list ->
-  let upload_status = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file_list]) in
+  >>= fun file ->
+  let upload_status = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file]) in
   let body = index_body ~upload_status () in
   Server.respond_string ~status:`OK ~body ()
 
