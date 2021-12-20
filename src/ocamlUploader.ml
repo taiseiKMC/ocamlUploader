@@ -120,7 +120,8 @@ let upload req (body : Cohttp_lwt.Body.t) =
   >>= fun file ->
   let upload_status = Format.sprintf "Accepted\n%s\n" (String.concat "\n" [file]) in
   let body = index_body ~upload_status () in
-  Server.respond_string ~status:`OK ~body ()
+  let headers = Cohttp.Header.init_with "Location" "/" in
+  Server.respond_string ~headers ~status:`See_other ~body ()
 
 let index _req =
   let body = index_body () in
