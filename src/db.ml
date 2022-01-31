@@ -24,6 +24,10 @@ module Make (P : sig
       | Not_found -> None in
     decode value
 
+  let remove db key =
+    Rwdb.remove db key;
+    Rwdb.sync db
+
   let fold f db =
     Rwdb.fold (fun k v -> f k (decode v)) db
 end
@@ -52,5 +56,6 @@ module Filename = struct
   let find = find db
   let find_opt = find_opt db
   let add = add db
+  let remove = remove db
   let fold f = fold f db
 end
