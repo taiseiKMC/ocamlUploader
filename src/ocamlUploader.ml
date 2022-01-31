@@ -84,7 +84,7 @@ let upload req (body : Cohttp_lwt.Body.t) =
     let rec parses posts = Lwt_stream.get stream >>= fun data ->
       match data, posts with
       | None, (Some upf, Some ctn) -> Lwt.return (upf, ctn)
-      | None, (Some upf, None) -> Lwt.return (upf, Lwt_stream.of_list ["(No description is given)"])
+      | None, (Some upf, None) -> Lwt.return (upf, Lwt_stream.of_list [])
       | Some (`Upfile (uuid, name, filename), hdr, contents), (None, descr) ->
         save_part ~filename hdr contents >>= fun () ->
         parses (Some (uuid, name, filename), descr)
@@ -96,6 +96,7 @@ let upload req (body : Cohttp_lwt.Body.t) =
       fun ((uuid, name, filename), dsr_ctn) ->
       Lwt_stream.to_list dsr_ctn >>= fun descr ->
       let descr = String.concat "" descr in
+      let descr = if String.length descr = 0 then "(No description is given)" else descr in
       let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
       let time = Unix.time () in
       Db.Filename.add uuid (descr, time, name);
