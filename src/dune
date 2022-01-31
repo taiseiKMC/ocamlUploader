@@ -8,7 +8,7 @@
     lwt.unix
     re
     multipart_form
-    multipart_form.lwt
+    multipart_form-lwt
     str
     logs
     dokeysto
