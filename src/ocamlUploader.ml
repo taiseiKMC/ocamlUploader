@@ -2,10 +2,9 @@ open Lwt
 open Cohttp
 open Cohttp_lwt_unix
 
+module Manager = Manager
 
-let uuidt = ref (Uuidm.v5 Uuidm.nil @@ string_of_float @@ Unix.time ())
-
-let content_dir = "uploads/"
+let content_dir = Manager.content_dir
 
 let index_body ?upload_status () =
   (* let uri = req |> Request.uri |> Uri.to_string in
@@ -61,9 +60,7 @@ let upload req (body : Cohttp_lwt.Body.t) =
       `Descr
     else
       let name = Content_disposition.filename cd in
-      let uuid = Uuidm.v5 !uuidt (Option.default "" name) in
-      uuidt := uuid;
-      let uuid = Uuidm.to_string uuid in
+      let uuid = Manager.gen_uuid name in
       let name = Option.default uuid name in
       `Upfile (uuid, name, content_dir ^ uuid) in
   let identify header = random_unique_filename header in
@@ -97,10 +94,7 @@ let upload req (body : Cohttp_lwt.Body.t) =
       fun ((uuid, name, filename), dsr_ctn) ->
       Lwt_stream.to_list dsr_ctn >>= fun descr ->
       let descr = String.concat "" descr in
-      let descr = if String.length descr = 0 then "(No description is given)" else descr in
-      let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
-      let time = Unix.time () in
-      Db.Filename.add uuid (descr, time, name);
+      Manager.add_record uuid descr name;
       Lwt.return ((uuid, filename), Format.sprintf "%s : %s" uuid name) in
 
 
@@ -144,14 +138,13 @@ let remove_record req body =
         Lwt.return fn
     in
     both th (saves ()) >>= fun (res, fn) ->
-    match res, Db.Filename.find_opt fn with
-    | Ok _, Some _ ->
-      let filename = content_dir ^ fn in
-      Lwt_unix.unlink filename >>= fun () ->
-      Db.Filename.remove fn;
-      Lwt.return (`OK, fn)
-    | Error (`Msg str), _ -> Lwt.return (`Internal_server_error, str)
-    | _, None -> Lwt.return (`Not_found, "") in
+    match res with
+    | Ok _ ->
+      Manager.remove_record fn >>= (function
+      | Ok () -> Lwt.return (`OK, fn)
+      | Error Not_found -> Lwt.return (`Not_found, "")
+      | Error _ -> Lwt.return (`Internal_server_error, ""))
+    | Error (`Msg str) -> Lwt.return (`Internal_server_error, str) in
 
   let header = Angstrom.parse_string Header.Decoder.header ~consume:Prefix headers in
   let header = match header with | Ok str -> str | Error str -> failwith str in
@@ -201,14 +194,7 @@ let debug_addrecord req body =
     both th (saves (None, None)) >>= fun (res, (filename, descr)) ->
     let descr = Option.default [""] descr in
     let descr = String.concat "" descr in
-    let descr = if descr = "" then "(No description is given)" else descr in
-    let descr = Netencoding.Html.encode ~in_enc:`Enc_utf8 ~out_enc:`Enc_utf8 () descr in
-    let time = Unix.time () in
-    let uuid = Uuidm.v5 !uuidt "" in
-    uuidt := uuid;
-    let uuid = Uuidm.to_string uuid in
-    let filename = Option.default uuid filename in
-    Db.Filename.add uuid (descr, time, filename);
+    let (uuid, filename) = Manager.add_dummy_record descr filename in
     match res with
     | Ok _ -> Lwt.return (Format.sprintf "%s : %s" uuid filename)
     | Error (`Msg str) -> failwith str in
