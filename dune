@@ -1,4 +1,4 @@
 (executable
   (public_name ocamlUploader)
   (name main)
-  (libraries ocamlUploader))
+  (libraries ocamlUploader core))
