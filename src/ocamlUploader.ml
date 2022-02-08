@@ -127,7 +127,7 @@ let index _req =
   let body = index_body () in
   Server.respond_string ~status:`OK ~body ()
 
-let server =
+let server port =
   if not @@ Sys.file_exists content_dir then Sys.mkdir content_dir 0o777 else ();
   let callback _conn req body =
     let path = req |> Request.uri |> Uri.path in
@@ -140,5 +140,5 @@ let server =
     end
   in
   Server.create
-    ~mode:(`TCP (`Port 8000))
+    ~mode:(`TCP (`Port port))
     (Server.make ~callback ())
