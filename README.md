@@ -6,14 +6,14 @@ A file uploader using OCaml
 ## Run
 ```
 opam install .
-ocamlUploader --port 8000
+ocamlUploader run --port 8000
 ```
 
 or
 
 ```
 dune build
-dune exec ./main.exe -- --port 8000
+dune exec ./main.exe -- run --port 8000
 ```
 
 and access http://localhost:8000
