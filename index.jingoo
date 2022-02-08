@@ -35,18 +35,51 @@
   </div>
 
   <div class="m-3 col-10">
-    <form method="post" action="upload" enctype="multipart/form-data">
+    <form id="upform">
       <h3>Upload Form</h3>
       <div class="form-group">
         <label>File: </label>
-        <input type="file" name="upfile" required>
+        <input type="file" id="upfile" name="upfile" required>
         <div class="form-inline">
           <label>Description: </label>
-          <input type="text" name="description" class="form-control">
+          <input type="text" id="description" name="description" class="form-control">
         </div>
-        <button type="submit" class="btn btn-primary" >Upload</button>
       </div>
     </form>
+
+    <div>
+      <button type="submit" class="btn btn-primary" id="post" >Upload</button>
+
+      <div>
+        <progress value="0" max="100"></progress>
+        <div id="progressStatus"></div>
+      </div>
+
+      <script>
+        function updateProgress(e) {
+          if (e.lengthComputable) {
+            var percent = e.loaded / e.total;
+            $("progress").attr("value", percent * 100);
+            var text = "";
+            if (e.loaded == e.total) {
+              text = "Completed!";
+            } else if (e.loaded > 0) {
+              text = "Uploading...";
+            }
+            document.getElementById("progressStatus").innerHTML = text;
+          }
+        }
+
+        document.getElementById("post").addEventListener("click", func = () => {
+          var formData = new FormData(document.getElementById("upform"));
+          console.log("upload");
+          var request = new XMLHttpRequest();
+          request.upload.addEventListener("progress", updateProgress, false);
+          request.open("POST", "/upload");
+          request.send(formData);
+        });
+      </script>
+    </div>
   </div>
 
   {% if uploaded %}
