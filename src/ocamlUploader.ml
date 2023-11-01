@@ -35,9 +35,9 @@ let download req path =
   Server.respond_file ~headers ~fname:filename ()
 
 type post_field =
-  [ `Upfile of string * string * string
-  | `Descr
-  | `Filename
+  [ `Upfile of string * string * string (* Uploaded file (uuid, filename, path) *)
+  | `Descr                              (* Description *)
+  | `Filename                           (* Filename only (for debug_add_record) *)
   ]
 [@@ocaml.warning "-34"]
 
@@ -45,11 +45,12 @@ let upload req (body : Cohttp_lwt.Body.t) =
   let headers = req |> Request.headers |> Header.to_string in
   let content_length = match Request.encoding req with | Fixed cl -> Some cl | _ -> None in
   let open Multipart_form in
+
   let save_part :
     filename:string ->
     Multipart_form.Header.t ->
     string Lwt_stream.t ->
-    unit Lwt.t = (* save posted data to a file *)
+    unit Lwt.t = (* save data [stream] to a file named [filename] *)
     fun ~filename _header stream ->
       Lwt_io.with_file
         ~mode:Output filename
@@ -178,7 +179,7 @@ let remove_record req body =
   Server.respond_string ~status ~body ()
 [@@ocaml.warning "-32"]
 
-let debug_addrecord req body =
+let debug_add_record req body =
   let headers = req |> Request.headers |> Header.to_string in
   let* body = Cohttp_lwt.Body.to_string body in
   let open Multipart_form in
@@ -244,7 +245,7 @@ let server port =
       if Str.string_match download_re path 0 then download req path
       else if Str.string_match upload_re path 0 then upload req body
       (* else if Str.string_match delete_re path 0 then remove_record req body *)
-      (* else if Str.string_match debug_addrecord_re path 0 then debug_addrecord req body *)
+      (* else if Str.string_match debug_addrecord_re path 0 then debug_add_record req body *)
       else index req
     end
   in
