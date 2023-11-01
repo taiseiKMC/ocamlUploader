@@ -6,18 +6,19 @@ module Manager = Manager
 
 let content_dir = Manager.content_dir
 
+(** Generate html page *)
 let index_body ?upload_status () =
   (* let uri = req |> Request.uri |> Uri.to_string in
      let meth = req |> Request.meth |> Code.string_of_method in
      let headers = req |> Request.headers |> Header.to_string in *)
-  let filenames = Db.Filename.fold
+  let filenames = Db.FileDB.fold
       (fun k v s -> (k, v) :: s) [] in
   let filenames = List.sort (fun (_, (_, t1, _)) (_, (_, t2, _)) -> compare t2 t1) filenames in
   (* ( Cohttp_lwt.Body.to_string body >|= fun body ->
      Printf.sprintf "Uri: %s\nMethod: %s\nHeaders\nHeaders: %s\nBody: %s\nFiles: %s" uri
       meth headers body indexes) *)
-  let url = "download/" in
-  Index.build_index url ?upload_status filenames
+  let path = "download/" in
+  Index.build_index path ?upload_status filenames
 
 let download req path =
   (match Request.meth req with
@@ -25,7 +26,7 @@ let download req path =
    | _ -> failwith "invalid request");
   let idx = Str.match_end () in
   let filename = String.sub path idx (String.length path - idx) in
-  let (_, _, original_name) = Db.Filename.find filename in
+  let (_, _, original_name) = Db.FileDB.find filename in
   let filename = content_dir ^ filename in
   let headers = Header.init () in
   let header_content_disposition = Format.sprintf "attachment; filename= %s" original_name in
@@ -40,7 +41,7 @@ type post_field = [
 
 let upload req (body : Cohttp_lwt.Body.t) =
   let headers = req |> Request.headers |> Header.to_string in
-  let content_length = match Request.encoding req  with | Fixed cl -> Some cl | _ -> None in
+  let content_length = match Request.encoding req with | Fixed cl -> Some cl | _ -> None in
   let open Multipart_form in
   let save_part : filename:string -> Multipart_form.Header.t -> string Lwt_stream.t ->
     unit Lwt.t = fun ~filename _header stream ->
@@ -102,7 +103,7 @@ let upload req (body : Cohttp_lwt.Body.t) =
     check_len >>= (function
     | Ok () -> Lwt.return_unit
     | Error str ->
-        Db.Filename.remove uuid;
+        Db.FileDB.remove uuid;
         Lwt_unix.unlink filename >>= fun () ->
         failwith str) >>= fun () ->
     match res with

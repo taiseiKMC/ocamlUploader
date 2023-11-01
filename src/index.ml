@@ -1,11 +1,11 @@
 open Jingoo
 
-let build_index url ?upload_status files =
+let build_index path ?upload_status files =
   let files = List.map
       (fun (uuid, (descr, _, name)) -> 
          Jg_types.Tobj [
            ("name", Jg_types.Tstr name);
-           ("url", Jg_types.Tstr (url ^ uuid));
+           ("url", Jg_types.Tstr (path ^ uuid));
            ("descr", Jg_types.Tstr descr);
          ]) files in
   let uploaded, upload_status =

@@ -2,8 +2,13 @@ module Rwdb = Dokeysto.Db.RW
 
 
 module Make (P : sig
+  (** data type that save to the file *)
     type val_ty
+
+    (** data encoding to string *)
     val encode : val_ty -> string
+
+    (** data encoding from string *)
     val decode : string -> val_ty
   end) = struct
   include P
@@ -33,10 +38,13 @@ module Make (P : sig
 end
 
 
-module Filename = struct
+module FileDB = struct
   include Make (struct
       type val_ty = string * float * string
 
+      (* Encode value typed val_ty by concatting them separated by '<'.
+         data except the last element in value cannot use '<' letter.
+         This case [descr] is always [Html.encode]d *)
       let encode (descr, uptime, filename) =
         Format.sprintf "%s<%f<%s" descr uptime filename
 

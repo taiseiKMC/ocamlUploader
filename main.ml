@@ -14,7 +14,7 @@ let reporter ppf =
 
 let run_server ?loglevel ~port () =
   let loglevel = match loglevel with
-    | None -> (* default *) Logs.Info
+    | None -> Logs.Info (* default *)
     | Some l ->
         if l = "debug" then Logs.Debug
         else if l = "info" then Logs.Info
@@ -32,9 +32,12 @@ let remove_record uuid =
   Lwt_main.run (OcamlUploader.Manager.remove_record uuid)
   |> Result.get_ok
 
+(* Add ONLY a record to the DB.
+   It means the caller should put the file with the name that is uuid printed to stdout.
+  *)
 let add_dummy_record descr filename =
   let (uuid, _) = OcamlUploader.Manager.add_dummy_record descr filename in
-  Format.printf "Add record %s\nPut the real file in %s and this record works\n"
+  Format.printf "Added record %s\nPut the real file in %s and this record works\n"
     uuid (OcamlUploader.Manager.content_dir ^ uuid)
 
 let _ =
@@ -56,7 +59,7 @@ let _ =
 
   let remove_record =
     Command.basic
-      ~summary:"Remove the record and file of given Filename(uuid)"
+      ~summary:"Remove the record and file of given FileDB(uuid)"
       (map
          (anon ("uuid" %: string))
          ~f:(fun uuid -> (fun () -> remove_record uuid))) in
