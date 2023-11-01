@@ -89,12 +89,12 @@
   {% if is_debug %}
   <div class="m-5">
     <h3>Info</h3>
-    <p>Upload file using curl
+    <p>Upload file by curl :
       <code>
         curl -X POST -F upfile=@/path/to/file -F description="D35CR1PT10N" http://&lt;host&gt;/upload
       </code>
     </p>
-    <p>Download file using curl
+    <p>Download file by curl :
       <code>
         curl -O http://&lt;host&gt;/download/&lt;uuid&gt;
       </code>
