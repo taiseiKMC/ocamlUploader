@@ -75,5 +75,4 @@ let _ =
     [ "run", run
     ; "remove", remove_record
     ; "add-dummy", add_dummy_record ]
-  |> Command.run
-
+  |> Command_unix.run
